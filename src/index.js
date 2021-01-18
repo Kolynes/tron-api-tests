@@ -2,6 +2,9 @@ const TronWeb = require("tronweb");
 const express = require("express");
 const mongodb = require("mongodb");
 const bodyParser = require("body-parser");
+const dotenv = require("dotenv")
+
+dotenv.config({path: __dirname + "/../.env"})
 
 const tronWeb = new TronWeb({
     fullHost: "https://api.nileex.io",
