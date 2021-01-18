@@ -81,4 +81,4 @@ app.post("/transfer", async (req, res) => {
     })
 })
 
-app.listen()
+app.listen(8000, () => console.log("listening on port 8000"))
