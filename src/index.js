@@ -1,8 +1,8 @@
-import TronWeb from "tronweb";
-import dotenv from "dotenv";
-import express from "express"
-import mongodb from "mongodb";
-import bodyParser from "body-parser";
+const TronWeb = require("tronweb");
+const dotenv = require("dotenv");
+const express = require("express");
+const mongodb = require("mongodb");
+const bodyParser = require("body-parser");
 
 dotenv.config();
 
