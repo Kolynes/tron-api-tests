@@ -8,7 +8,6 @@ dotenv.config();
 
 const tronWeb = new TronWeb({
     fullHost: "https://api.nileex.io",
-    eventHost: "https://event.nileex.io",
     privateKey: process.env.PRIVATE_KEY
 });
 
