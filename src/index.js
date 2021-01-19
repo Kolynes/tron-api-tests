@@ -7,12 +7,12 @@ const dotenv = require("dotenv")
 dotenv.config({path: __dirname + "/../.env"})
 
 const tronWeb = new TronWeb({
-    fullHost: "https://api.nileex.io",
+    fullHost: "https://api.shasta.trongrid.io",  // mainnet
     privateKey: process.env.PRIVATE_KEY
 });
 
 const app = express();
-const usdtContract = tronWeb.contract().at("TP3Z8xWtaZjwhNpSXFF7C66t2813vfc4LD"); // the usdt address
+const usdtContract = tronWeb.contract().at("TSMmQT5yQkmJmxzRLAF7UY8UQvbGLtungz"); // the usdt address
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -29,14 +29,31 @@ function db(callback) {
 
 // connect to the usdt contract and track transfers
 
-// usdtContract.then(contract => {
-//     var transferEvent = contract.Transfer();
-//     transferEvent.watch((err, result) => console.log(result));
-// });
+usdtContract.then(contract => {
+    var transferEvent = contract.Transfer();
+    transferEvent.watch((err, event) => {
+        db(client => {
+            const addresses = client.db("jk").collection("addresses");
+            addresses.findOne({"address.hex": event.result.to}, async (err, dbResult) => {
+                if(err)
+                    return;
+                else {
+                    var contract = await usdtContract;
+                    var decimals = await contract.decimals().call()
+                    event.result.value /= Math.pow(10, decimals)
+                    event.result.to = tronWeb.address.fromHex(event.result.to)
+                    event.result.from = tronWeb.address.fromHex(event.result.from)
+                    console.log(event)
+                }
+            })
+        })
+    });
+});
 
 app.get("/create_address", async (req, res) => {
     var addressInfo = await tronWeb.createAccount();
     db((client) => {
+        
         const addresses = client.db("jk").collection("addresses");
         addresses.insert(addressInfo, (err, result) => {
             if(err == null) {
@@ -57,7 +74,6 @@ app.post("/transfer", async (req, res) => {
     }
     var contract = await usdtContract;
     const balance = tronWeb.toDecimal((await contract.balanceOf(from).call())._hex)
-    console.log(balance)
     if(balance < amount) {
         res.send({error: "Insufficient funds"});
         return;
@@ -71,8 +87,6 @@ app.post("/transfer", async (req, res) => {
             }
             else {
                 tronWeb.setPrivateKey(result.privateKey);
-                console.log(result.address.base58, from)
-                console.log(result)
                 contract.transfer(to, amount).send().then(console.log).catch(console.log);
                 tronWeb.setPrivateKey(process.env.PRIVATE_KEY);
                 res.send({msg: "transaction in process"});
