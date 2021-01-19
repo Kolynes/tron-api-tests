@@ -36,7 +36,6 @@ usdtContract.then(contract => {
         if(err)
             console.log(err)
         else {
-            console.log(event)
             db(client => {
                 const addresses = client.db("jk").collection("addresses");
                 addresses.findOne({"address.hex": event.result.to}, async (err, dbResult) => {
@@ -48,7 +47,7 @@ usdtContract.then(contract => {
                         event.result.value /= Math.pow(10, decimals)
                         event.result.to = tronWeb.address.fromHex(event.result.to)
                         event.result.from = tronWeb.address.fromHex(event.result.from)
-                        console.log(event)
+                        console.log(event, "\n\n")
                     }
                 })
             })
