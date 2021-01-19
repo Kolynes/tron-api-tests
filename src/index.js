@@ -8,6 +8,7 @@ dotenv.config({path: __dirname + "/../.env"})
 
 const tronWeb = new TronWeb({
     fullHost: "https://api.shasta.trongrid.io",  // mainnet
+    eventServer: "https://api.shasta.trongrid.io",
     privateKey: process.env.PRIVATE_KEY
 });
 
@@ -32,22 +33,28 @@ function db(callback) {
 usdtContract.then(contract => {
     var transferEvent = contract.Transfer();
     transferEvent.watch((err, event) => {
-        db(client => {
-            const addresses = client.db("jk").collection("addresses");
-            addresses.findOne({"address.hex": event.result.to}, async (err, dbResult) => {
-                if(err)
-                    return;
-                else {
-                    var contract = await usdtContract;
-                    var decimals = await contract.decimals().call()
-                    event.result.value /= Math.pow(10, decimals)
-                    event.result.to = tronWeb.address.fromHex(event.result.to)
-                    event.result.from = tronWeb.address.fromHex(event.result.from)
-                    console.log(event)
-                }
+        if(err)
+            console.log(err)
+        else {
+            console.log(event)
+            db(client => {
+                const addresses = client.db("jk").collection("addresses");
+                addresses.findOne({"address.hex": event.result.to}, async (err, dbResult) => {
+                    if(err)
+                        console.log(err)
+                    else {
+                        var contract = await usdtContract;
+                        var decimals = await contract.decimals().call()
+                        event.result.value /= Math.pow(10, decimals)
+                        event.result.to = tronWeb.address.fromHex(event.result.to)
+                        event.result.from = tronWeb.address.fromHex(event.result.from)
+                        console.log(event)
+                    }
+                })
             })
-        })
+        }
     });
+    console.log("connected to contract")
 });
 
 app.get("/create_address", async (req, res) => {
