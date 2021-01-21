@@ -10,7 +10,7 @@ dotenv.config({path: __dirname + "/../.env"})
 const tronWeb = new TronWeb({
     fullHost: "https://api.shasta.trongrid.io",  // mainnet
     eventServer: "https://api.shasta.trongrid.io",
-    privateKey: process.env.PRIVATE_KEY
+    privateKey: process.env.FEES_ADDRESS_PRIVATE_KEY
 });
 
 const usdtContractAddress = "TSMmQT5yQkmJmxzRLAF7UY8UQvbGLtungz";
@@ -64,7 +64,7 @@ app.get("/create_address", async (req, res) => {
     fetch("https://api.shasta.trongrid.io/wallet/createaccount", {
         method: 'post',
         body: JSON.stringify({
-            owner_address: process.env.OWNER_ADDRESS,
+            owner_address: process.env.FEES_ADDRESS,
             account_address: addressInfo.address.base58,
             visible: true
         }),
@@ -109,13 +109,18 @@ app.post("/transfer", async (req, res) => {
             else {
                 res.send({msg: "transaction in process"});
                 tronWeb.setPrivateKey(result.privateKey);
-                contract.transfer(to, amount).send().then(async () => {
+                contract.transfer(to, amount).send().then(async trx => {
+                    console.log(trx)
+                    tronWeb.setPrivateKey(process.env.FEES_ADDRESS_PRIVATE_KEY);
                     const balanceTRX = await tronWeb.trx.getBalance(from);
+                    console.log("balance", balanceTRX)
                     const reembursement = 2 * 1e6 - balanceTRX;
-                    if(reembursement > 0)
-                        tronWeb.trx.sendTransaction(addressInfo.address.base58, reembursement, process.env.PRIVATE_KEY)
+                    console.log(reembursement)
+                    if(reembursement > 0) {
+                        tronWeb.trx.sendTransaction(result.address.base58, reembursement, process.env.FEES_ADDRESS_PRIVATE_KEY)
+                    }
                 }).catch(console.log);
-                tronWeb.setPrivateKey(process.env.PRIVATE_KEY);
+                tronWeb.setPrivateKey(process.env.FEES_ADDRESS_PRIVATE_KEY);
             }
         })
     })
