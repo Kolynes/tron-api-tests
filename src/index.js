@@ -3,6 +3,7 @@ const express = require("express");
 const mongodb = require("mongodb");
 const bodyParser = require("body-parser");
 const dotenv = require("dotenv")
+const fetch = require("node-fetch")
 
 dotenv.config({path: __dirname + "/../.env"})
 
@@ -12,8 +13,10 @@ const tronWeb = new TronWeb({
     privateKey: process.env.PRIVATE_KEY
 });
 
+const usdtContractAddress = "TSMmQT5yQkmJmxzRLAF7UY8UQvbGLtungz";
+
 const app = express();
-const usdtContract = tronWeb.contract().at("TSMmQT5yQkmJmxzRLAF7UY8UQvbGLtungz"); // the usdt address
+const usdtContract = tronWeb.contract().at(usdtContractAddress); // the usdt address
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -34,7 +37,7 @@ usdtContract.then(contract => {
     var transferEvent = contract.Transfer();
     transferEvent.watch((err, event) => {
         if(err)
-            console.log(err)
+            console.log("failed to watch")
         else {
             db(client => {
                 const addresses = client.db("jk").collection("addresses");
@@ -58,8 +61,17 @@ usdtContract.then(contract => {
 
 app.get("/create_address", async (req, res) => {
     var addressInfo = await tronWeb.createAccount();
+    fetch("https://api.shasta.trongrid.io/wallet/createaccount", {
+        method: 'post',
+        body: JSON.stringify({
+            owner_address: process.env.OWNER_ADDRESS,
+            account_address: addressInfo.address.base58,
+            visible: true
+        }),
+        headers: { 'Content-Type': 'application/json' },
+    })
+    tronWeb.trx.sendTransaction(addressInfo.address.base58, 2 * 1e6, process.env.PRIVATE_KEY)
     db((client) => {
-        
         const addresses = client.db("jk").collection("addresses");
         addresses.insert(addressInfo, (err, result) => {
             if(err == null) {
@@ -73,7 +85,10 @@ app.get("/create_address", async (req, res) => {
 app.post("/transfer", async (req, res) => {
     const to = req.body.to;
     const from = req.body.from;
-    const amount = req.body.amount;
+    var amount = req.body.amount;
+    var contract = await usdtContract;
+    var decimals = await contract.decimals().call()
+    amount *= Math.pow(10, decimals)
     if(to == null || from == null || amount == null) {
         res.send({error: "Incomplete parameters"});
         return;
@@ -92,10 +107,15 @@ app.post("/transfer", async (req, res) => {
                 res.send({error: `${from} not found in database`})
             }
             else {
-                tronWeb.setPrivateKey(result.privateKey);
-                contract.transfer(to, amount).send().then(console.log).catch(console.log);
-                tronWeb.setPrivateKey(process.env.PRIVATE_KEY);
                 res.send({msg: "transaction in process"});
+                tronWeb.setPrivateKey(result.privateKey);
+                contract.transfer(to, amount).send().then(async () => {
+                    const balanceTRX = await tronWeb.trx.getBalance(from);
+                    const reembursement = 2 * 1e6 - balanceTRX;
+                    if(reembursement > 0)
+                        tronWeb.trx.sendTransaction(addressInfo.address.base58, reembursement, process.env.PRIVATE_KEY)
+                }).catch(console.log);
+                tronWeb.setPrivateKey(process.env.PRIVATE_KEY);
             }
         })
     })
