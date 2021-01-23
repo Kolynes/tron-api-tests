@@ -50,7 +50,24 @@ usdtContract.then(contract => {
                         event.result.value /= Math.pow(10, decimals)
                         event.result.to = tronWeb.address.fromHex(event.result.to)
                         event.result.from = tronWeb.address.fromHex(event.result.from)
-                        console.log(event, "\n\n")
+                        const confirmations = (await tronWeb.trx.getCurrentBlock()).block_header.raw_data.number - event.block + 1
+                        fetch(`https://jackocoins.herokuapp.com/api/v1/tron_hook/${event.result.to}`, {
+                            method: "post",
+                            body: JSON.stringify({
+                                txHash: `0x${event.transaction}`,
+                                type: "TOKEN",
+                                currency: "TRX",
+                                network: "mainnet",
+                                token_symbol: "USDT",
+                                token_name: "Tether USD",
+                                contract: usdtContractAddress,
+                                token_type: "TRC-20",
+                                address: event.result.to,
+                                value: (event.result.value).toFixed(6),
+                                confirmations
+                            }),
+                            headers: { 'Content-Type': 'application/json' },
+                        }).then(async res => console.log(await res.json()))
                     }
                 })
             })
@@ -110,12 +127,9 @@ app.post("/transfer", async (req, res) => {
                 res.send({msg: "transaction in process"});
                 tronWeb.setPrivateKey(result.privateKey);
                 contract.transfer(to, amount).send().then(async trx => {
-                    console.log(trx)
                     tronWeb.setPrivateKey(process.env.FEES_ADDRESS_PRIVATE_KEY);
                     const balanceTRX = await tronWeb.trx.getBalance(from);
-                    console.log("balance", balanceTRX)
                     const reembursement = 2 * 1e6 - balanceTRX;
-                    console.log(reembursement)
                     if(reembursement > 0) {
                         tronWeb.trx.sendTransaction(result.address.base58, reembursement, process.env.FEES_ADDRESS_PRIVATE_KEY)
                     }
@@ -123,6 +137,30 @@ app.post("/transfer", async (req, res) => {
                 tronWeb.setPrivateKey(process.env.FEES_ADDRESS_PRIVATE_KEY);
             }
         })
+    })
+})
+
+app.get("/transactions/:trxId", async (req, res) => {
+    const trxId = req.params.trxId;
+    const transactionInfo = await tronWeb.trx.getTransactionInfo(trxId)
+    const transaction = await tronWeb.trx.getTransaction(trxId)
+    var contract = await usdtContract;
+    var decimals = await contract.decimals().call()
+    const confirmations = (await tronWeb.trx.getCurrentBlock()).block_header.raw_data.number - transactionInfo.blockNumber + 1
+    const dataLength = transaction.raw_data.contract[0].parameter.value.data.length
+    const address = tronWeb.address.fromHex(`41${transaction.raw_data.contract[0].parameter.value.data.substring(dataLength - 64*2 + (24), dataLength - 64)}`)
+    res.send({
+        txHash: trxId,
+        type: "TOKEN",
+        currency: "TRX",
+        network: "mainnet",
+        token_symbol: "USDT",
+        token_name: "Tether USD",
+        contract: usdtContractAddress,
+        token_type: "TRC-20",
+        address,
+        value: (tronWeb.toDecimal(`0x${transactionInfo.log[0].data}`) / Math.pow(10, decimals)).toFixed(6),
+        confirmations
     })
 })
 
